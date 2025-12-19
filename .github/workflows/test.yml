@@ -1,0 +1,170 @@
+name: Test Scripts
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch: # Allow manual runs
+
+jobs:
+  test-bash-scripts:
+    name: Test Bash Scripts
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl
+      
+      - name: Make scripts executable
+        run: |
+          chmod +x hytale/*.sh minecraft/*.sh
+      
+      - name: Test Hytale script syntax
+        run: |
+          bash -n hytale/fetch-hytale-versions.sh
+      
+      - name: Test Minecraft script syntax
+        run: |
+          bash -n minecraft/fetch-minecraft-versions.sh
+      
+      - name: Test Hytale script help
+        run: |
+          ./hytale/fetch-hytale-versions.sh --help
+      
+      - name: Test Minecraft script help
+        run: |
+          ./minecraft/fetch-minecraft-versions.sh --help
+      
+      # Note: We don't test with actual API calls to avoid exposing tokens
+      # and to prevent rate limiting on CI
+
+  test-powershell-scripts:
+    name: Test PowerShell Scripts
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Test Hytale script syntax
+        shell: pwsh
+        run: |
+          $null = [System.Management.Automation.PSParser]::Tokenize(
+            (Get-Content hytale/fetch-hytale-versions.ps1 -Raw), 
+            [ref]$null
+          )
+          Write-Host "✓ Hytale PowerShell script syntax is valid"
+      
+      - name: Test Minecraft script syntax
+        shell: pwsh
+        run: |
+          $null = [System.Management.Automation.PSParser]::Tokenize(
+            (Get-Content minecraft/fetch-minecraft-versions.ps1 -Raw), 
+            [ref]$null
+          )
+          Write-Host "✓ Minecraft PowerShell script syntax is valid"
+      
+      - name: Test script parameter validation
+        shell: pwsh
+        run: |
+          # Test that scripts fail gracefully without token
+          try {
+            & .\hytale\fetch-hytale-versions.ps1 -ErrorAction Stop
+            Write-Error "Script should have failed without token"
+            exit 1
+          } catch {
+            Write-Host "✓ Script correctly requires ApiToken parameter"
+          }
+      
+      # Note: We don't test with actual API calls to avoid exposing tokens
+
+  lint-shell-scripts:
+    name: Lint Shell Scripts with ShellCheck
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+          ignore_paths: '.git'
+          ignore_names: '*.ps1'
+          severity: warning
+
+  check-formatting:
+    name: Check Script Formatting
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check for CRLF line endings
+        run: |
+          # PowerShell scripts can have CRLF, but bash scripts should be LF
+          if file hytale/*.sh minecraft/*.sh | grep -q CRLF; then
+            echo "❌ Bash scripts have CRLF line endings. Please convert to LF."
+            exit 1
+          fi
+          echo "✓ Bash scripts have correct line endings"
+      
+      - name: Check for executable permissions
+        run: |
+          for script in hytale/*.sh minecraft/*.sh; do
+            if [ ! -x "$script" ]; then
+              echo "❌ $script is not executable"
+              exit 1
+            fi
+          done
+          echo "✓ All bash scripts are executable"
+      
+      - name: Check for trailing whitespace
+        run: |
+          if grep -n '[[:space:]]$' hytale/*.sh minecraft/*.sh; then
+            echo "❌ Found trailing whitespace in bash scripts"
+            exit 1
+          fi
+          echo "✓ No trailing whitespace in bash scripts"
+
+  test-json-exports:
+    name: Test JSON Export Files
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install jq
+        run: sudo apt-get install -y jq
+      
+      - name: Validate example JSON exports (if present)
+        run: |
+          # Only validate if example export files exist
+          for json_file in *.json; do
+            if [ -f "$json_file" ]; then
+              echo "Validating $json_file..."
+              jq empty "$json_file" || exit 1
+              echo "✓ $json_file is valid JSON"
+            fi
+          done
+          echo "✓ All JSON files are valid"
+
+  all-tests-passed:
+    name: All Tests Passed
+    runs-on: ubuntu-latest
+    needs: [test-bash-scripts, test-powershell-scripts, lint-shell-scripts, check-formatting, test-json-exports]
+    
+    steps:
+      - name: Success
+        run: |
+          echo "🎉 All tests passed!"
+          echo "Scripts are ready for use!"

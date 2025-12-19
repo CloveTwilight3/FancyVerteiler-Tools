@@ -1,0 +1,91 @@
+name: API Connectivity Check
+
+on:
+  schedule:
+    # Run every Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch: # Allow manual runs
+
+jobs:
+  check-api:
+    name: Check CurseForge API Availability
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check Minecraft CurseForge API
+        run: |
+          echo "Testing Minecraft CurseForge API availability..."
+          response=$(curl -s -w "\n%{http_code}" https://minecraft.curseforge.com/api/game/versions)
+          http_code=$(echo "$response" | tail -n1)
+          
+          if [ "$http_code" = "403" ]; then
+            echo "✓ API endpoint is accessible (403 expected without token)"
+            exit 0
+          elif [ "$http_code" = "200" ]; then
+            echo "✓ API endpoint is accessible"
+            exit 0
+          else
+            echo "❌ API returned unexpected status: $http_code"
+            exit 1
+          fi
+      
+      - name: Check Hytale CurseForge API
+        run: |
+          echo "Testing Hytale CurseForge API availability..."
+          response=$(curl -s -w "\n%{http_code}" https://hytale.curseforge.com/api/game/versions)
+          http_code=$(echo "$response" | tail -n1)
+          
+          if [ "$http_code" = "403" ]; then
+            echo "✓ API endpoint is accessible (403 expected without token)"
+            exit 0
+          elif [ "$http_code" = "200" ]; then
+            echo "✓ API endpoint is accessible"
+            exit 0
+          else
+            echo "❌ API returned unexpected status: $http_code"
+            echo "Note: Hytale API might not be fully available yet"
+            exit 0  # Don't fail, just warn
+          fi
+      
+      - name: Create issue if API is down
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '🚨 CurseForge API Connectivity Issue Detected';
+            const body = `The scheduled API check detected an issue with the CurseForge API.
+            
+            **When:** ${new Date().toISOString()}
+            **Workflow:** ${context.workflow}
+            **Run ID:** ${context.runId}
+            
+            Please check if:
+            - CurseForge API is experiencing downtime
+            - API endpoints have changed
+            - Scripts need updating
+            
+            **Action Required:** Investigate and update scripts if needed.
+            
+            ---
+            *This issue was automatically created by the API Connectivity Check workflow.*`;
+            
+            // Check if issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'api-issue'
+            });
+            
+            if (issues.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['api-issue', 'bug']
+              });
+            }

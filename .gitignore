@@ -1,0 +1,24 @@
+# API Tokens
+.token
+*.token
+token.txt
+
+# Export files
+*-export.json
+hytale-versions-export.json
+minecraft-*-versions-export.json
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Logs
+*.log

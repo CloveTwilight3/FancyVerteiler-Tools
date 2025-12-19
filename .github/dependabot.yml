@@ -1,0 +1,22 @@
+# Dependabot configuration for FancyVerteiler-Tools
+# This keeps GitHub Actions up to date automatically
+
+version: 2
+updates:
+  # Keep GitHub Actions up to date
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    reviewers:
+      - "clovetwilight3"
+    # Group all GitHub Actions updates into a single PR
+    groups:
+      github-actions:
+        patterns:
+          - "*"
