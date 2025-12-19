@@ -84,11 +84,9 @@ fi
 # Determine which gameVersionTypeID to filter by
 if [ "$PROJECT_TYPE" = "plugin" ]; then
     TYPE_ID=1
-    TYPE_NAME="Bukkit/Plugin"
 else
     # For mods, we'll show multiple version types
     TYPE_ID="73407,75125,77784"
-    TYPE_NAME="Mod Loader"
 fi
 
 # Filter and parse JSON

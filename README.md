@@ -3,6 +3,10 @@
 ![PowerShell](https://custom-icon-badges.demolab.com/badge/PowerShell-5391FE?logo=powershell-white&logoColor=fff)
 ![Bash](https://custom-icon-badges.demolab.com/badge/Bash-4EAA25?logo=gnubash&logoColor=white)
 
+![Test Scripts](https://github.com/CloveTwilight3/FancyVerteiler-Tools/actions/workflows/test.yml/badge.svg)
+![API Check](https://github.com/CloveTwilight3/FancyVerteiler-Tools/actions/workflows/api-check.yml/badge.svg)
+![License](https://img.shields.io/github/license/CloveTwilight3/FancyVerteiler-Tools)
+
 Minimal cross-platform scripts to fetch **Minecraft** and **Hytale** version IDs from the  [CurseForge API](https://www.curseforge.com) for use with  [FancyVerteiler](https://github.com/FancyInnovations/FancyVerteiler).
 
 Created by [CloveTwilight3](https://github.com/clovetwilight3)
