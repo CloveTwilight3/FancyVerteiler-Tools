@@ -6,6 +6,10 @@ on:
     - cron: '0 9 * * 1'
   workflow_dispatch: # Allow manual runs
 
+permissions:
+  issues: write
+  contents: read
+
 jobs:
   check-api:
     name: Check CurseForge API Availability
@@ -16,37 +20,60 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Check Minecraft CurseForge API
+        env:
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
         run: |
           echo "Testing Minecraft CurseForge API availability..."
-          response=$(curl -s -w "\n%{http_code}" https://minecraft.curseforge.com/api/game/versions)
-          http_code=$(echo "$response" | tail -n1)
           
-          if [ "$http_code" = "403" ]; then
-            echo "✓ API endpoint is accessible (403 expected without token)"
-            exit 0
-          elif [ "$http_code" = "200" ]; then
-            echo "✓ API endpoint is accessible"
+          if [ -z "$CURSEFORGE_TOKEN" ]; then
+            echo "⚠️  Warning: CURSEFORGE_TOKEN secret not set"
+            echo "Add your CurseForge API token to repository secrets as CURSEFORGE_TOKEN"
+            exit 1
+          fi
+          
+          response=$(curl -s -w "\n%{http_code}" \
+            -H "X-Api-Token: $CURSEFORGE_TOKEN" \
+            https://minecraft.curseforge.com/api/game/versions)
+          
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n -1)
+          
+          if [ "$http_code" = "200" ]; then
+            # Check if we actually got valid JSON with versions
+            version_count=$(echo "$body" | jq 'length' 2>/dev/null || echo "0")
+            echo "✓ Minecraft API is accessible (HTTP $http_code)"
+            echo "✓ Retrieved $version_count game versions"
             exit 0
           else
-            echo "❌ API returned unexpected status: $http_code"
+            echo "❌ Minecraft API returned unexpected status: $http_code"
+            echo "Response: $body"
             exit 1
           fi
       
       - name: Check Hytale CurseForge API
+        env:
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
         run: |
           echo "Testing Hytale CurseForge API availability..."
-          response=$(curl -s -w "\n%{http_code}" https://hytale.curseforge.com/api/game/versions)
-          http_code=$(echo "$response" | tail -n1)
           
-          if [ "$http_code" = "403" ]; then
-            echo "✓ API endpoint is accessible (403 expected without token)"
+          response=$(curl -s -w "\n%{http_code}" \
+            -H "X-Api-Token: $CURSEFORGE_TOKEN" \
+            https://hytale.curseforge.com/api/game/versions)
+          
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n -1)
+          
+          if [ "$http_code" = "200" ]; then
+            version_count=$(echo "$body" | jq 'length' 2>/dev/null || echo "0")
+            echo "✓ Hytale API is accessible (HTTP $http_code)"
+            echo "✓ Retrieved $version_count game versions"
             exit 0
-          elif [ "$http_code" = "200" ]; then
-            echo "✓ API endpoint is accessible"
-            exit 0
+          elif [ "$http_code" = "404" ]; then
+            echo "⚠️  Hytale API returned 404 - may not be fully available yet"
+            exit 0  # Don't fail, Hytale is still in development
           else
-            echo "❌ API returned unexpected status: $http_code"
-            echo "Note: Hytale API might not be fully available yet"
+            echo "⚠️  Hytale API returned status: $http_code"
+            echo "Note: This might be expected if Hytale API isn't fully live yet"
             exit 0  # Don't fail, just warn
           fi
       
@@ -55,37 +82,51 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const title = '🚨 CurseForge API Connectivity Issue Detected';
+            const title = '🚨 CurseForge API Connectivity Issue';
             const body = `The scheduled API check detected an issue with the CurseForge API.
             
             **When:** ${new Date().toISOString()}
             **Workflow:** ${context.workflow}
-            **Run ID:** ${context.runId}
+            **Run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
             
             Please check if:
             - CurseForge API is experiencing downtime
+            - API token is still valid
             - API endpoints have changed
             - Scripts need updating
             
-            **Action Required:** Investigate and update scripts if needed.
+            **Action Required:** 
+            1. Check workflow logs above
+            2. Verify API token in secrets
+            3. Test scripts locally
+            4. Update scripts if needed
             
             ---
             *This issue was automatically created by the API Connectivity Check workflow.*`;
             
-            // Check if issue already exists
-            const issues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: 'api-issue'
-            });
-            
-            if (issues.data.length === 0) {
-              await github.rest.issues.create({
+            try {
+              // Check if issue already exists
+              const issues = await github.rest.issues.listForRepo({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                title: title,
-                body: body,
-                labels: ['api-issue', 'bug']
+                state: 'open',
+                labels: 'api-issue'
               });
+              
+              if (issues.data.length === 0) {
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: title,
+                  body: body,
+                  labels: ['api-issue', 'bug']
+                });
+                console.log('✓ Created issue for API connectivity problem');
+              } else {
+                console.log('ℹ️  Issue already exists, not creating duplicate');
+              }
+            } catch (error) {
+              console.log('⚠️  Could not create issue (insufficient permissions?)');
+              console.log('Error:', error.message);
+              // Don't fail the workflow if issue creation fails
             }
